@@ -5,8 +5,11 @@ import pygame_gui
 import pygame_widgets as pw
 from pygame_widgets.textbox import TextBox
 from pygame_widgets.button import Button
+from pygame_widgets.dropdown import Dropdown
 import numpy as np
 import math
+import config
+from mysql.connector import connect, Error
 
 
 # WORK OUT CLASS STRUCTURE
@@ -16,7 +19,8 @@ class Interfaces:
         self.manager = m
         self.surface = s
         self.widgets = {}
-        self.state = 'start_menu'
+        self.state = None
+        self.type = None
         self.menu_created = False
         self.hMove, self.vMove = 0, 0
 
@@ -31,60 +35,120 @@ class Interfaces:
     def getCameraPos(self):
         return [self.hMove, self.vMove]
 
+    # NEED TO WORK OUT HOW state AND menu_created ARE MANAGED
     def changeState(self):
         if self.state =='start_menu':
-            self.menu_created = False
             self.hideWidgets()
             self.state = 'main_menu'
-        else:
-            pass
-        print("state changed")
+        elif self.state == 'main_menu':
+            # menu_created affecting loop
+            self.menu_created = False
+            self.hideWidgets()
+            self.state = 'start_menu'
+        print(f"state changed state = {self.state}")
 
 
 # KEEP CODING THIS
 class startMenu(Interfaces):
     def createStartMenu(self):
+        self.state = 'start_menu'
         self.menu_created = True
+        print('test')
         self.window.fill((0,0,0))
+        # placeholder pygame text for 'ENter username:' and 'Enter password:
         self.widgets['username'] = TextBox(
-            self.window, 300, 100,
-            200,80,
-            placeholderText = 'Enter Username'
+            self.window, 250, 100,
+            300,50
         )
-        # ADD PASSWORD FONT
+        pwdFont = pygame.font.Font('password.ttf')
         self.widgets['password'] = TextBox(
-            self.window, 300, 200,
-            200, 80,
-            placeholderText = 'Enter Password'
+            self.window, 250, 200,
+            300, 50,
+            font = pwdFont
         )
-        self.widgets['teacher'] = Button(
-            self.window, 300, 300,
+
+        self.widgets['account_type_dropdown'] = Dropdown(
+            self.window, 550, 100,
+            150, 80, name = 'Select Account Type',
+            choices=[
+                'Teacher',
+                'Student',
+            ],
+            values = ['Teacher', 'Student']
+        )
+        self.widgets['create_account'] = Button(
+            self.window, 550, 400,
             100, 80,
-            text = 'Teacher'
+            text = 'Create Account',
+            onClick = self.addAccount
         )
-        self.widgets['student'] = Button(
-            self.window, 400, 300,
-            100, 80,
-            text = 'Student'
-        )
+
         self.widgets['log_in_submit'] = Button(
-            self.window, 300, 400,
-            200, 80,
+            self.window, 350, 400,
+            100, 80,
             text = 'Submit',
-            onClick = self.changeState
+            onClick = self.checkType
         )
+    
+    # changeState and checkType *********
+    def checkType(self):
+        config.menu_type = self.widgets['account_type_dropdown'].getSelected()
+        self.changeState()
+
+    
+    def addAccount(self):
+        username = self.getInput('username')
+        password = self.getInput('password')
+        accountType = self.widgets['account_type_dropdown'].getSelected()
+        print(accountType)
+        # DISPLAY ACCOUNT CONFIRMATION + USERNAME/PASSWORD EXSIST
+
+        conn = connect(**config.DB_INFO)
+        cursor = conn.cursor()
+        checkQuery = ('SELECT * FROM users'
+                      'WHERE username = %s')
+        check = cursor.execute(checkQuery, username)
+        if check == None or check == ' ' or check == []:
+            addQuery = ('INSERT INTO users ' 
+                    '(username, password, accountType) ' 
+                    'VALUES (%s, %s, %s)')
+            cursor.execute(addQuery, (username, password, accountType))
+        else:
+            print('else')
+            # TEXT TO DISPLAY ITS INVALID
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+    def getInput(self, label):
+        return self.widgets[label].getText()
+
+
+
 
 
 
 
 class mainMenu(Interfaces):
     def createMainMenu(self):
+        self.state = 'main_menu'
         self.menu_created = True
         self.window.fill((255,255,255))
         graph_surface = pygame.Surface((600,600))
         graph_surface.fill((255,255,255))
+        if config.menu_type == 'Teacher':
+            print('created button')
+            self.widgets['createSession'] = Button(
+                self.window, 600, 600, 200, 80
+            )
         self.widgets['inputEntry1'] = TextBox(
-            self.window, 600, 200, 200, 80
+            self.window, 600, 200, 100, 80
+        )
+        
+        self.widgets['back'] = Button(
+            self.window, 600, 400, 100, 80,
+            text = 'Back',
+            onClick = self.changeState
         )
         
         self.drawAxis(graph_surface)

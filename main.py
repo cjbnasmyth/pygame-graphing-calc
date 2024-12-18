@@ -42,8 +42,11 @@ while running:
             print('redrawn')
             window.fill((255,255,255))
             bottomLayer.redrawPoints()
-        if topLayer.state == 'main_menu':
+        if topLayer.state == 'main_menu' and bottomLayer.state != 'start_menu':
             bottomLayer.createMainMenu()
+        if bottomLayer.state == 'start_menu' and topLayer.state != 'main_menu':
+            print('test2') #*****************
+            topLayer.createStartMenu()
     manager.process_events(event)
 
     manager.update(time_delta)
