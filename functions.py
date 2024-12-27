@@ -1,5 +1,6 @@
 import pygame
 import pygame.display
+import pygame.freetype
 from pygame.locals import *
 import pygame_gui
 import pygame_widgets as pw
@@ -11,7 +12,7 @@ import math
 import config
 from mysql.connector import connect, Error
 
-
+pygame.freetype.init()
 # WORK OUT CLASS STRUCTURE
 class Interfaces:
     def __init__(self, m, w, s):
@@ -21,6 +22,9 @@ class Interfaces:
         self.widgets = {}
         self.state = None
         self.type = None
+        self.startMenuFont = pygame.freetype.Font(None, 20)
+        self.accountActive = False
+        self.pwdState = 'password'
         self.menu_created = False
         self.hMove, self.vMove = 0, 0
 
@@ -28,20 +32,28 @@ class Interfaces:
         for i in self.widgets.values():
             i.hide()
 
+    # USE THIS TO GET RID OF TEXT, BUT WHEN TO CALL IT IDK?
+    def clearText(self):
+        pygame.draw.rect(self.window, (0,0,0), pygame.Rect(0,540,800,40))
+
     def renderWidgets(self):
         for i in self.widgets.values():
             i.render()
 
     def getCameraPos(self):
         return [self.hMove, self.vMove]
+    
+    def getInput(self, label):
+        try:
+            return self.widgets[label].getText()
+        except:
+            print(f'Label: {label} doesnt exsist')
 
-    # NEED TO WORK OUT HOW state AND menu_created ARE MANAGED
     def changeState(self):
         if self.state =='start_menu':
             self.hideWidgets()
             self.state = 'main_menu'
         elif self.state == 'main_menu':
-            # menu_created affecting loop
             self.menu_created = False
             self.hideWidgets()
             self.state = 'start_menu'
@@ -55,16 +67,22 @@ class startMenu(Interfaces):
         self.menu_created = True
         print('test')
         self.window.fill((0,0,0))
-        # placeholder pygame text for 'ENter username:' and 'Enter password:
+        # forgot password? LATER
+        # placeholder pygame text for 'Enter username:' and 'Enter password:
         self.widgets['username'] = TextBox(
             self.window, 250, 100,
             300,50
         )
-        pwdFont = pygame.font.Font('password.ttf')
         self.widgets['password'] = TextBox(
             self.window, 250, 200,
             300, 50,
-            font = pwdFont
+            font = config.pwdFont
+        )
+
+        self.widgets['show_password'] = Button(
+            self.window, 600, 200,
+            50, 50,
+            onClick = lambda: self.showPass(self.pwdState)
         )
 
         self.widgets['account_type_dropdown'] = Dropdown(
@@ -90,38 +108,64 @@ class startMenu(Interfaces):
             onClick = self.checkType
         )
     
-    # changeState and checkType *********
+    # FOR SHOWING PASSWORD BUTTON 
+    def showPass(self, state):
+        if state == 'password':
+            self.pwdState = 'normal'
+            temp_text = self.widgets['password'].getText()
+            print(temp_text)
+            self.widgets['password'].hide()
+            self.widgets['temp'] =TextBox(
+                self.window, 250, 200,
+                300, 50,
+                placeholderText = temp_text
+            )
+        else:
+            self.pwdState = 'password'
+            self.widgets['temp'].hide()
+            self.widgets['password'].show()
+
     def checkType(self):
-        config.menu_type = self.widgets['account_type_dropdown'].getSelected()
-        self.changeState()
+        if self.accountActive == False:
+            self.startMenuFont.render_to(self.window, (1,1), 'Not logged in', fgcolor=(255,0,0))
+            print('denied')
+            pass
+        else:
+            config.menu_type = self.widgets['account_type_dropdown'].getSelected()
+            self.changeState()
 
     
     def addAccount(self):
         username = self.getInput('username')
         password = self.getInput('password')
         accountType = self.widgets['account_type_dropdown'].getSelected()
-        print(accountType)
         # DISPLAY ACCOUNT CONFIRMATION + USERNAME/PASSWORD EXSIST
-
         conn = connect(**config.DB_INFO)
-        cursor = conn.cursor()
-        checkQuery = ('SELECT * FROM users'
-                      'WHERE username = %s')
-        check = cursor.execute(checkQuery, username)
-        if check == None or check == ' ' or check == []:
+        cursor = conn.cursor(buffered=True)
+        checkQuery = ('SELECT * FROM users '
+                    'WHERE username = %s')
+        cursor.execute(checkQuery, (username,))
+        check = cursor.fetchone()
+        print(checkQuery)
+        if any(not element for element in [username, password, accountType]):
+            # TEXT TO SAY ONE OF THE FIELDS IS EMPTY
+            check = False
+        else:
+            pass
+        print(check)   
+        if check is None:
+            self.accountActive = True
             addQuery = ('INSERT INTO users ' 
                     '(username, password, accountType) ' 
                     'VALUES (%s, %s, %s)')
             cursor.execute(addQuery, (username, password, accountType))
         else:
-            print('else')
-            # TEXT TO DISPLAY ITS INVALID
+            # TEXT TO SAY USERNAME IS ALREADY TAKEN
+            print('failed')
         conn.commit()
         cursor.close()
         conn.close()
 
-    def getInput(self, label):
-        return self.widgets[label].getText()
 
 
 
@@ -142,11 +186,28 @@ class mainMenu(Interfaces):
                 self.window, 600, 600, 200, 80
             )
         self.widgets['inputEntry1'] = TextBox(
-            self.window, 600, 200, 100, 80
+            self.window, 600, 100, 60, 80,
+            text = 'X'
+        )
+
+        self.widgets['inputEntry2'] = TextBox(
+            self.window, 665, 100, 60, 80,
+            text = 'Y'
         )
         
+        self.widgets['inputEntry3'] = TextBox(
+            self.window, 730, 100, 60, 80,
+            text = 'Z'
+        )
+
+        self.widgets['submit'] = Button(
+            self.window, 600, 500, 90, 80,
+            text = 'Submit',
+            onClick = self.handleInput
+        )
+
         self.widgets['back'] = Button(
-            self.window, 600, 400, 100, 80,
+            self.window, 700, 500, 90, 80,
             text = 'Back',
             onClick = self.changeState
         )
@@ -230,6 +291,9 @@ class mainMenu(Interfaces):
 
     # for working out the 3d coords of each point after input (whether that is equation or whatever)
     def handleInput(self, equation):
-        return [1,1,1]      
+        x_input = self.getInput('inputEntry1')
+        y_input = self.getInput('inputEntry2')
+        z_input = self.getInput('inputEntry3')
+        return [x_input, y_input, z_input]
 
 
