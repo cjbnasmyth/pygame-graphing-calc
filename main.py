@@ -47,6 +47,12 @@ while running:
             topLayer.state = 'start_menu'
         if bottomLayer.state == 'start_menu':
             topLayer.createStartMenu()
+
+        # CLEAR TEXT
+        if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+            if topLayer.state == 'start_menu':
+                print('made rect')
+                pygame.draw.rect(topLayer.window, (0,0,0), pygame.Rect(0,560,800,40))
     manager.process_events(event)
 
     manager.update(time_delta)

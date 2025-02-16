@@ -13,7 +13,7 @@ import config
 from mysql.connector import connect, Error
 
 pygame.freetype.init()
-# WORK OUT CLASS STRUCTURE
+
 class Interfaces:
     def __init__(self, m, w, s):
         self.window = w
@@ -22,6 +22,7 @@ class Interfaces:
         self.widgets = {}
         self.state = None
         self.type = None
+        # CONFIG FILE?
         self.startMenuFont = pygame.freetype.Font(None, 20)
         self.accountActive = False
         self.pwdState = 'password'
@@ -33,8 +34,12 @@ class Interfaces:
             i.hide()
 
     # USE THIS TO GET RID OF TEXT, BUT WHEN TO CALL IT IDK?
-    def clearText(self):
-        pygame.draw.rect(self.window, (0,0,0), pygame.Rect(0,540,800,40))
+    def clearText(self, menu):
+        # if menu == 'start_menu':
+        #     pygame.draw.rect(self.window, (0,0,0), pygame.Rect(0,540,800,40))
+        # elif menu == 'main_menu':
+        #     # same as above but change the x, y to message area on the main menu
+            pass
 
     def renderWidgets(self):
         for i in self.widgets.values():
@@ -125,30 +130,56 @@ class startMenu(Interfaces):
             self.widgets['temp'].hide()
             self.widgets['password'].show()
 
+    # DOESNT WORK NEED TO CATCH CASE WHERE USER CHANGES INFO AFTER CREATING ACCONT
     def checkType(self):
-        if self.accountActive == False:
-            self.startMenuFont.render_to(self.window, (1,1), 'Not logged in', fgcolor=(255,0,0))
-            print('denied')
+        sqlSubmit = self.checkSubmit()
+        print(sqlSubmit)
+        if self.accountActive == False or sqlSubmit == False:
+            self.startMenuFont.render_to(self.window, (1,580), 'Not logged in', fgcolor=(255,0,0))
+            print(f'denied accountActive: {self.accountActive}, sqlSubmit: {sqlSubmit}')
             pass
         else:
             config.menu_type = self.widgets['account_type_dropdown'].getSelected()
             self.changeState()
 
-    
-    def addAccount(self):
+    def getTextFields(self):
         username = self.getInput('username')
         password = self.getInput('password')
         accountType = self.widgets['account_type_dropdown'].getSelected()
+        return [username, password, accountType]
+    
+    # STILL DOESNT WORK INPUT VALID ACCOUNT DATA THEN empty field
+    def checkSubmit(self):
+        data = self.getTextFields()
+        checkConn = connect(**config.DB_INFO)
+        checkCursor = checkConn.cursor(buffered=True)
+        query = ('SELECT password, accountType FROM users '
+                 'WHERE username = %s')
+        checkCursor.execute(query, (data[0],))
+        condition = checkCursor.fetchone()
+        # run if non-empty tuple
+        if condition:
+                # unpacks tuple
+                retrievedPassword, retrievedAccountType = condition
+                if retrievedPassword != data[1] or retrievedAccountType != data[2]:
+                    self.startMenuFont.render_to(self.window, (400,760), 'Incorrect password or account type', fgcolor=(255,0,0))
+                    return False
+                else:
+                    return True
+
+
+    def addAccount(self):
+        data = self.getTextFields()
         # DISPLAY ACCOUNT CONFIRMATION + USERNAME/PASSWORD EXSIST
         conn = connect(**config.DB_INFO)
         cursor = conn.cursor(buffered=True)
         checkQuery = ('SELECT * FROM users '
                     'WHERE username = %s')
-        cursor.execute(checkQuery, (username,))
+        cursor.execute(checkQuery, (data[0],))
         check = cursor.fetchone()
         print(checkQuery)
-        if any(not element for element in [username, password, accountType]):
-            # TEXT TO SAY ONE OF THE FIELDS IS EMPTY
+        if any(not element for element in data):
+            self.startMenuFont.render_to(self.window, (400,760), 'Input field empty', fgcolor=(255,0,0))
             check = False
         else:
             pass
@@ -158,10 +189,11 @@ class startMenu(Interfaces):
             addQuery = ('INSERT INTO users ' 
                     '(username, password, accountType) ' 
                     'VALUES (%s, %s, %s)')
-            cursor.execute(addQuery, (username, password, accountType))
+            cursor.execute(addQuery, (data[0], data[1], data[2]))
+            print('text')
+            self.startMenuFont.render_to(self.window, (400,760), 'Account created!', fgcolor=(0,255,0))
         else:
-            # TEXT TO SAY USERNAME IS ALREADY TAKEN
-            print('failed')
+            self.startMenuFont.render_to(self.window, (400,760), 'Username already taken', fgcolor=(255,0,0))
         conn.commit()
         cursor.close()
         conn.close()
@@ -272,7 +304,7 @@ class mainMenu(Interfaces):
         thetaX, thetaY, thetaZ = 0, 0, 0
         # A array is the 3D position of the point being projetced (ie the point before projection)
         aArray = np.array([elementPosition[0],elementPosition[1],elementPosition[2]])
-        # what value for z??????
+        # what value for z?????? looking down the barrel of the Z axis so therefore should be the max value? (max value on the pygame coord scale?)
         cArray = np.array([cameraPostion[0],cameraPostion[1],1])
         subPostion = np.subtract(aArray, cArray)
         print(subPostion)
