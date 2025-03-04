@@ -19,6 +19,7 @@ class Interfaces:
         self.window = w
         self.manager = m
         self.surface = s
+        self.graph_surface = pygame.Surface((600,600))
         self.widgets = {}
         self.state = None
         self.type = None
@@ -27,7 +28,6 @@ class Interfaces:
         self.accountActive = False
         self.pwdState = 'password'
         self.menu_created = False
-        self.hMove, self.vMove = 0, 0
 
     def hideWidgets(self):
         for i in self.widgets.values():
@@ -45,8 +45,6 @@ class Interfaces:
         for i in self.widgets.values():
             i.render()
 
-    def getCameraPos(self):
-        return [self.hMove, self.vMove]
     
     def getInput(self, label):
         try:
@@ -192,8 +190,10 @@ class startMenu(Interfaces):
             cursor.execute(addQuery, (data[0], data[1], data[2]))
             print('text')
             self.startMenuFont.render_to(self.window, (400,760), 'Account created!', fgcolor=(0,255,0))
+            pygame.display.update()
         else:
             self.startMenuFont.render_to(self.window, (400,760), 'Username already taken', fgcolor=(255,0,0))
+            pygame.display.update()
         conn.commit()
         cursor.close()
         conn.close()
@@ -206,12 +206,21 @@ class startMenu(Interfaces):
 
 
 class mainMenu(Interfaces):
+    def __init__(self, m, w, s):
+        self.hMove, self.vMove = 0, 0
+        self.graph_surface = pygame.Surface((600,600))
+        self.graphInputs = []
+        super().__init__(m, w, s)
+    
+    def getCameraPos(self):
+        return [self.hMove, self.vMove]
+    
     def createMainMenu(self):
         self.state = 'main_menu'
         self.menu_created = True
         self.window.fill((255,255,255))
-        graph_surface = pygame.Surface((600,600))
-        graph_surface.fill((255,255,255))
+
+        self.graph_surface.fill((255,255,255))
         if config.menu_type == 'Teacher':
             print('created button')
             self.widgets['createSession'] = Button(
@@ -244,10 +253,10 @@ class mainMenu(Interfaces):
             onClick = self.changeState
         )
         
-        self.drawAxis(graph_surface)
+        self.drawAxis(self.graph_surface)
 
         # self.renderWidgets
-        self.window.blit(graph_surface, (0,0))
+        self.window.blit(self.graph_surface, (0,0))
 
     def drawAxis(self, s):
         self.drawXaxis(s)
@@ -256,76 +265,77 @@ class mainMenu(Interfaces):
 
     def drawXaxis(self, surface):
         # x line
-        xStart = self.trigCalc([-300, 0,  0])
-        xEnd = self.trigCalc([300,0,0])
+
+        xStart = self.trigCalc([-200,0,0], 'x')
+        xEnd = self.trigCalc([200,0,0],'x')
         print([xStart, xEnd])
         pygame.draw.line(surface, (255,0,0),
-                        [0, 300],
-                        [600,300], 2)
+                        xStart,
+                        xEnd, 2)
     
     def drawYAxis(self, surface):
         # y line
-        yStart = self.trigCalc([0,-300,0])
-        yEnd = self.trigCalc([0,300,0])
+        yStart = self.trigCalc([0,-200,0], 'y')
+        yEnd = self.trigCalc([0,200,0], 'y')
         print([yStart, yEnd])
         pygame.draw.line(surface, (0,255,0),
-                        yEnd,
-                        yStart, 2)
+                        yStart,
+                        yEnd, 2)
     
     def drawZAxis(self, surface):
         # z line
-        zStart = self.trigCalc([0,0,-300])
-        zEnd = self.trigCalc([0,0,300])
+        zStart = self.trigCalc([0,0,-200], 'z')
+        zEnd = self.trigCalc([0,0,200],'z')
         print([zStart, zEnd])
-        pygame.draw.line(surface, (0,0,255),
-                         zEnd,
-                         zStart, 2)
+        pygame.draw.line(surface, (0,0,255), zStart, zEnd, 2)
 
+    # Have to do one movement after clicking submit to render the point
+    # The axis move with the camera movements
     def redrawPoints(self):
+        self.graph_surface.fill((255,255,255))
         # change 'a' to input!!!!!!
-        newPos = self.trigCalc(self.handleInput('a'))
+        if len(self.graphInputs) > 0:
+            for inputs in self.graphInputs:
+                newPos = self.trigCalc(inputs)
+                pygame.draw.circle(self.graph_surface, (0,0,0), (newPos[0],newPos[1]), 4)
+        else:
+            pass
         # DONE IN trigCalc? to ge thhe points to the center of the section ie 300, 300
         # newPos[0] += 300
         # newPos[1] += 300
-        pygame.draw.circle(self.window, (0,0,0), (newPos[0],newPos[1]), 4)
+        self.drawAxis(self.graph_surface)
+        self.window.blit(self.graph_surface, (0,0))
 
 
-    def trigCalc(self, elementPosition):
-        # x,y,z is supposed to be the 'orientation of the camera'
-        # Below is camera orientation
+    def trigCalc(self, elementPosition, whatAxis=None):
+        if whatAxis == 'x':
+            i = 0
+        elif whatAxis == 'y':
+            i = 1
+        elif whatAxis == 'z' or whatAxis == None:
+            i = 2
         cameraPostion = self.getCameraPos()
-        # for i in range(0, len(elementPosition)):
-        #     if elementPosition[i] is not 0:
-        #         if i == 0:
-        #             thetaX = self.hMove/math.sqrt((600^2)+(self.hMove^2))
-        #             thetaX = math.cos(thetaX)
-        #         elif i == 1:
-        #             theta
-        thetaX, thetaY, thetaZ = 0, 0, 0
-        # A array is the 3D position of the point being projetced (ie the point before projection)
-        aArray = np.array([elementPosition[0],elementPosition[1],elementPosition[2]])
-        # what value for z?????? looking down the barrel of the Z axis so therefore should be the max value? (max value on the pygame coord scale?)
-        cArray = np.array([cameraPostion[0],cameraPostion[1],1])
-        subPostion = np.subtract(aArray, cArray)
-        print(subPostion)
-        # in matrix form????
-        # WHAT SCALE????????? - normal coord scale which should thne be adjusted like line 114, 115
-        dX = math.cos(thetaY)*(math.sin(thetaZ)*subPostion[1]+math.cos(thetaZ)*subPostion[0]) - math.sin(thetaY)*subPostion[2]
-        dY = math.sin(thetaX)*(math.cos(thetaY)*subPostion[2]+math.sin(thetaY)*(math.sin(thetaZ)*subPostion[1]+math.cos(thetaZ)*subPostion[0])+math.cos(thetaX)*(math.cos(thetaZ*subPostion[1]-math.sin(thetaZ)*subPostion[0])))
-        dZ = math.cos(thetaX)*(math.cos(thetaY)*subPostion[2]+math.sin(thetaY)*(math.sin(thetaZ)*subPostion[1]+math.cos(thetaZ)*subPostion[0])-math.sin(thetaX)*(math.cos(thetaZ*subPostion[1]-math.sin(thetaZ)*subPostion[0])))    
-        print(f'dZ = {dZ}')
-        if dZ == 0:
-            print('Div by 0 error')
-            return None, None
-        projectedX = (cArray[2]/dZ)*dX + cArray[0]
-        projetcedY = (cArray[2]/dZ)*dY + cArray[1]
-        return [projectedX+300, projetcedY+300]
+  
+        # How to work out the camera z value (300)??? when using the 2 hMove and vMove 
+        print(f'cam pos: {cameraPostion}')
+        print(f'elem pos: {elementPosition}')
+        projectedX = (300*(cameraPostion[0]+ elementPosition[0])) / (300+ elementPosition[i])
+        projectedY = (300*(cameraPostion[1]+ elementPosition[1])) / (300+ elementPosition[i])
+        return [(projectedX+300)-cameraPostion[0], (projectedY+300)-cameraPostion[1]]
+
+    # def fixedTrigCalc(self, elementPosition):
+    #     x, y, z = elementPosition
+    #     # Perform fixed calculations here
+    #     # For simplicity, let's assume the fixed reference point is the origin (0, 0, 0)
+    #     projectedX = (300 * x) / (300 + z)
+    #     projectedY = (300 * y) / (300 + z)
+    #     return [projectedX + 300, projectedY + 300]
 
     # for working out the 3d coords of each point after input (whether that is equation or whatever)
-    def handleInput(self, equation):
-        x_input = self.getInput('inputEntry1')
-        y_input = self.getInput('inputEntry2')
-        z_input = self.getInput('inputEntry3')
-        return [x_input, y_input, z_input]
+    def handleInput(self):
+        x_input = int(self.getInput('inputEntry1'))
+        y_input = int(self.getInput('inputEntry2'))
+        z_input = int(self.getInput('inputEntry3'))
+        self.graphInputs.append([x_input, y_input, z_input])
 
 

@@ -1,56 +1,48 @@
 import pygame
-from pygame.locals import *
 import pygame_gui
-# from functions import
+from pygame.locals import *
 
 pygame.init()
 
-window = pygame.display.set_mode((800, 600))
-
+width, length = 800, 600
+surface = pygame.Surface((width, length))
+manager = pygame_gui.UIManager((width, length))
+window = pygame.display.set_mode((width, length))
 window.fill((255, 255, 255))
-pygame.display.update()
-manager = pygame_gui.UIManager((800,600))
-# hud container contains all the inputs and everything EXCEPT the graph
 
-# hud = pygame_gui.elements.UIPanel(relative_rect=pygame.Rect((800,600) ,(800,600)), manager=manager, object_id='hud')
-# graph holds the scrollable container
-graph = pygame_gui.elements.UIScrollingContainer(relative_rect=pygame.Rect((0,0),(800,600)), manager=manager, allow_scroll_x= True, allow_scroll_y= True, object_id= 'graph')
-surface = pygame.Surface((800,600))
+hMove, vMove = 0, 0
+cameraArray = [hMove, vMove]
 
-graph.set_scrollable_area_dimensions((2000,2000))
-# x line
-pygame.draw.line(surface, (0,0,0),
-                 [100, 300],
-                 [500,300], 2)
-
-# y line
-pygame.draw.line(surface, (0,0,0),
-                 [300,500],
-                 [300,100], 2)
-
-pygame.display.update()
-# https://pygame-gui.readthedocs.io/en/latest/quick_start.html
 clock = pygame.time.Clock()
 running = True
-
 while running:
-    time_delta = clock.tick(60)/1000
-    for event in pygame.event.get():
+    time_delta = clock.tick(60) / 1000
+    events = pygame.event.get()
+
+    for event in events:
         if event.type == pygame.QUIT:
             running = False
-        
-        manager.process_events(event)
-    
+        if event.type == KEYDOWN:
+            if event.key == K_LEFT:
+                hMove -= 1
+            if event.key == K_RIGHT:
+                hMove += 1
+            if event.key == K_UP:
+                vMove += 1
+            if event.key == K_DOWN:
+                vMove -= 1
+            print(hMove, vMove)
+            # Only redraw when camera moves
+            if hMove == 0 and vMove == 0:
+                pygame.draw.line(window, (255, 0, 0), (100, 300), (700, 300), 2)
+                pygame.draw.line(window, (0, 255, 0), (400, 100), (400, 500), 2)
+                pygame.draw.line(window, (0, 0, 255), (400, 300), (400, 300), 2)
+                print('redrawn')
+            else:
+                window.fill((255, 255, 255))  # Only fill the background when camera moves
+
+    manager.process_events(event)
     manager.update(time_delta)
     manager.draw_ui(window)
-pygame.display.update()
-pygame.quit()
-
-
-# ----TO-DO-----
-# Container for the graph
-# Matrix calculations for 3D
-# 'Drag' the graph around 
-# Points input 
-# Show the values on the axis of the 3D graph
-# Fill the 'shapes' with colour connecting the points
+    
+    pygame.display.update()

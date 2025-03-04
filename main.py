@@ -32,15 +32,15 @@ while running:
             running = False
         if event.type == pygame.KEYDOWN and bottomLayer.menu_created == True:
             if event.key == K_LEFT:
-                bottomLayer.hMove -= 1
+                bottomLayer.hMove -= 10
             if event.key == K_RIGHT:
-                bottomLayer.hMove += 1
+                bottomLayer.hMove += 10
             if event.key == K_UP:
-                bottomLayer.vMove += 1
+                bottomLayer.vMove += 10
             if event.key == K_DOWN:
-                bottomLayer.vMove -= 1
-            print('redrawn')
+                bottomLayer.vMove -= 10
             window.fill((255,255,255))
+            print('redrawn')
             bottomLayer.redrawPoints()
         if topLayer.state == 'main_menu':
             bottomLayer.createMainMenu()
@@ -48,11 +48,12 @@ while running:
         if bottomLayer.state == 'start_menu':
             topLayer.createStartMenu()
 
+
         # CLEAR TEXT
-        if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
-            if topLayer.state == 'start_menu':
-                print('made rect')
-                pygame.draw.rect(topLayer.window, (0,0,0), pygame.Rect(0,560,800,40))
+        # if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
+        #     if topLayer.state == 'start_menu':
+        #         print('made rect')
+        #         pygame.draw.rect(topLayer.window, (0,0,0), pygame.Rect(0,560,800,40))
     manager.process_events(event)
 
     manager.update(time_delta)
