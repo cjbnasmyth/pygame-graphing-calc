@@ -32,13 +32,17 @@ while running:
             running = False
         if event.type == pygame.KEYDOWN and bottomLayer.menu_created == True:
             if event.key == K_LEFT:
-                bottomLayer.hMove -= 10
+                bottomLayer.hMove += 2
             if event.key == K_RIGHT:
-                bottomLayer.hMove += 10
+                bottomLayer.hMove -= 2
             if event.key == K_UP:
-                bottomLayer.vMove += 10
+                bottomLayer.vMove += 2
             if event.key == K_DOWN:
-                bottomLayer.vMove -= 10
+                bottomLayer.vMove -= 2
+            if event.key == K_KP_PLUS:
+                bottomLayer.zoom += 10
+            if event.key == K_KP_MINUS:
+                bottomLayer.zoom -= 10
             window.fill((255,255,255))
             print('redrawn')
             bottomLayer.redrawPoints()
@@ -47,6 +51,7 @@ while running:
             topLayer.state = 'start_menu'
         if bottomLayer.state == 'start_menu':
             topLayer.createStartMenu()
+            bottomLayer.state = 'main_menu'
 
 
         # CLEAR TEXT
