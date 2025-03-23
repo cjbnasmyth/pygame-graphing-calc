@@ -1,6 +1,7 @@
 import pygame
 import pygame_gui.ui_manager
 import pygame_widgets
+import ast
 from functions import *
 
 pygame.init()
@@ -39,13 +40,16 @@ while running:
                 bottomLayer.vMove += 2
             if event.key == K_DOWN:
                 bottomLayer.vMove -= 2
-            if event.key == K_KP_PLUS:
-                bottomLayer.zoom += 10
-            if event.key == K_KP_MINUS:
-                bottomLayer.zoom -= 10
             window.fill((255,255,255))
-            print('redrawn')
-            bottomLayer.redrawPoints()
+            bottomLayer.drawnPoints.clear()
+            bottomLayer.redraw()
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            x, y  = event.pos
+            values = bottomLayer.drawnPoints.values()
+            for values in values:
+                if values.collidepoint(event.pos):
+                    drawerPos = [key for key,value in bottomLayer.drawnPoints.items() if value == values][0]
+                    bottomLayer.lineDrawer(drawerPos)
         if topLayer.state == 'main_menu':
             bottomLayer.createMainMenu()
             topLayer.state = 'start_menu'
