@@ -14,8 +14,8 @@ window.fill((255,255,255))
 
 hMove, vMove = 0, 0
 cameraArray = [hMove,vMove]
-bottomLayer = mainMenu(manager, window, surface)
-topLayer = startMenu(manager,window, surface)
+bottomLayer = MainMenu(manager, window, surface)
+topLayer = StartMenu(manager,window, surface)
 # hBar = bottomLayer.createScrollingContainer()
 # topLayer = hudUI(manager, window, surface)
 # for scrolling to work there must be something in the graph container

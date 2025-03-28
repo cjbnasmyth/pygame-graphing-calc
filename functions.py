@@ -3,6 +3,7 @@ import pygame.display
 import pygame.freetype
 from threading import Thread
 from time import sleep
+import pygame.gfxdraw
 from pygame.locals import *
 import pygame_gui
 import pygame_widgets as pw
@@ -24,14 +25,12 @@ class Interfaces:
         self.window = w
         self.manager = m
         self.surface = s
-        self.graph_surface = pygame.Surface((600,600))
         self.widgets = {}
         self.state = None
-        self.type = None
         # CONFIG FILE?
         self.startMenuFont = pygame.freetype.Font(None, 20)
         self.accountActive = False
-        self.pwdState = 'password'
+        self.pwdState = True
         self.menu_created = False
 
     def hideWidgets(self):
@@ -39,20 +38,20 @@ class Interfaces:
             i.hide()
 
 
-    # TEST THIS WITH BTOH MENUS
     def systemMessages(self, message, startMenu = False, error=False):
         if error:
             colour = (255,0,0)
         else:
             colour = (0,255,0)
         if startMenu:
-            self.startMenuFont.render_to(self.window, (250,580), message, fgcolor=colour)
-            print('rendered message')
-            sleep(3)
-            pygame.draw.rect(self.window, (0,50,0), pygame.Rect(400,580,400,20))
+            self.startMenuFont.render_to(self.window, (300,580), message, fgcolor=colour)
+            pygame.display.update()
+            sleep(1)
+            pygame.draw.rect(self.window, (0,0,0), pygame.Rect(300,580,400,20))
         else:
             self.startMenuFont.render_to(self.window, (600,20), message, fgcolor=colour)
-            sleep(3)
+            pygame.display.update()
+            sleep(1)
             pygame.draw.rect(self.window, (255,245,255), pygame.Rect(600, 20, 200,20))
         
     # def renderWidgets(self):
@@ -77,7 +76,7 @@ class Interfaces:
         print(f"state changed state = {self.state}")
 
 
-class startMenu(Interfaces):
+class StartMenu(Interfaces):
     def createStartMenu(self):
         self.state = 'start_menu'
         self.menu_created = True
@@ -126,8 +125,8 @@ class startMenu(Interfaces):
     
     # FOR SHOWING PASSWORD BUTTON 
     def showPass(self, state):
-        if state == 'password':
-            self.pwdState = 'normal'
+        if state:
+            self.pwdState = False
             temp_text = self.widgets['password'].getText()
             self.widgets['password'].hide()
             self.widgets['temp'] =TextBox(
@@ -136,7 +135,7 @@ class startMenu(Interfaces):
                 placeholderText = temp_text
             )
         else:
-            self.pwdState = 'password'
+            self.pwdState = True
             self.widgets['temp'].hide()
             self.widgets['password'].show()
 
@@ -202,7 +201,7 @@ class startMenu(Interfaces):
                     '(username, password, accountType) ' 
                     'VALUES (%s, %s, %s)')
             cursor.execute(addQuery, (data[0], data[1], data[2]))
-            accountSuccess = Thread(target=self.systemMessages('Account Created!', True),daemon=True)
+            accountSuccess = Thread(target=self.systemMessages('Account Created!', True, False),daemon=True)
             accountSuccess.start()
             pygame.display.update()
         else:
@@ -220,18 +219,17 @@ class startMenu(Interfaces):
 
 
 
-class mainMenu(Interfaces):
+class MainMenu(Interfaces):
     def __init__(self, m, w, s):
         self.hMove, self.vMove = 0, 0
         self.graph_surface = pygame.Surface((600,600))
         self.graphInputs = []
         self.inputSubmit = False
         self.mathConversion = {}
-        self.drawnPoints = defaultdict(lambda: None)
+        self.drawnPoints = {}
         self.connectingLines = []
         self.lineChecker = False
         self.connectingLinesTemp = []
-        self.deleteFromMenu = {}
         self.checkedPos = []  # Moved checkedPos to an instance variable
         super().__init__(m, w, s)
     
@@ -247,6 +245,12 @@ class mainMenu(Interfaces):
                 self.window, 600, 400, 190, 80, 
                 text = 'Create Session',
                 onClick = self.createSession
+            )
+        else:
+            self.widgets['joinSession'] = Button(
+                self.window, 600, 400, 190, 80,
+                text = 'Join Session',
+                onClick = self.joinSession
             )
         self.widgets['inputEntry1'] = TextBox(
             self.window, 600, 80, 60, 40,
@@ -299,108 +303,93 @@ class mainMenu(Interfaces):
 
     def createSession(self):
         pass
+    
+    def joinSession(self):
+        pass
 
     def drawXaxis(self):
         # x line
 
-        xStart = self.trigCalc([-200,0,0])
-        xEnd = self.trigCalc([200,0,0])
+        xStart = self.projection([-200,0,0])
+        xEnd = self.projection([200,0,0])
         pygame.draw.line(self.graph_surface, (255,0,0),
                         xStart,
                         xEnd, 2)
         
-        xlabelCoords = self.trigCalc([220,5,0])
+        xlabelCoords = self.projection([220,5,0])
         self.startMenuFont.render_to(self.graph_surface, (xlabelCoords[0], xlabelCoords[1]), 'X', fgcolor=(255,0,0))
     
     def drawYAxis(self):
         # y line
-        yStart = self.trigCalc([0,-200,0])
-        yEnd = self.trigCalc([0,200,0])
+        yStart = self.projection([0,-200,0])
+        yEnd = self.projection([0,200,0])
         pygame.draw.line(self.graph_surface, (0,255,0),
                         yStart,
                         yEnd, 2)
         
-        yLabelCoords = self.trigCalc([5,220,0])
+        yLabelCoords = self.projection([5,220,0])
         self.startMenuFont.render_to(self.graph_surface, (yLabelCoords[0], yLabelCoords[1]), 'Y', fgcolor=(0,255,0))
     
     def drawZAxis(self):
         # z line
-        zStart = self.trigCalc([0,0,-200])
-        zEnd = self.trigCalc([0,0,200])
+        zStart = self.projection([0,0,-200])
+        zEnd = self.projection([0,0,200])
         pygame.draw.line(self.graph_surface, (0,0,255), zStart, zEnd, 2)
 
-        zLabelCoords = self.trigCalc([5,5,220])
+        zLabelCoords = self.projection([5,5,220])
         self.startMenuFont.render_to(self.graph_surface, (zLabelCoords[0], zLabelCoords[1]), 'Z', fgcolor=(0,0,255))
+
+    def getMathPoint(self, point3D):
+        for key, value in self.mathConversion.items():
+            if key == point3D:
+                return value
+        return None
 
 
     def redraw(self):
         self.graph_surface.fill((255,255,255))
+        self.drawAxis()
 
+        # print(f'connectingLines.itesm() {self.connectingLines.items()}')
+        # for key,value in self.connectingLines.items():
+        #     linePos = [self.projection(list(key)), self.projection(list(value))]
+        #     # print(f'drawing line with this start {list(key)} and end {list(value)}')
+        #     pygame.draw.line(self.graph_surface, (255,165,0), linePos[0], linePos[1], 2)
 
-        # attemtping to draw the axis and poitns in order however logic is flawed and causes bug when deleting points skip?
+        # This logic not working leads to one of the connecting lines (last one to be drawn?) to be hiden/removed from self.connectingLines\\\\\\
         if len(self.graphInputs) > 0:
-            # count = 0
-            # drawnX, drawnZ, drawnY = False, False, False
-            # sortedInputs = sorted(self.graphInputs, key = lambda p : p[2], reverse=True)
-            # transformedAxisEnd = {
-            #     'x': None,
-            #     'y': None,
-            #     'z': None
-            # }
-            # for key in transformedAxisEnd:
-            #     if key == 'x':
-            #         x,y,z = self.pointTransformation([200,0,0])
-            #         transformedAxisEnd['x'] = [x,y,z]
-            #     elif key == 'y':
-            #         x,y,z = self.pointTransformation([0,200,0])
-            #         transformedAxisEnd['y'] = [x,y,z]
-            #     elif key == 'z':
-            #         x,y,z = self.pointTransformation([0,0,200])
-            #         transformedAxisEnd['z'] = [x,y,z]
-            # print(transformedAxisEnd)
-            # axisEndPoints = []
-            # for value in transformedAxisEnd.values():
-            #     axisEndPoints.append(value)
-            # sortedAxis = sorted(axisEndPoints, key = lambda p: p[2], reverse=True)
-            # sortedInputsAndAxis = sortedInputs + sortedAxis
-            # print(f'sortedInptusandaxis = {sortedInputsAndAxis}')
-            # sortedInputsAndAxis = sorted(sortedInputsAndAxis, key= lambda p: p[2], reverse = True)
-            for values in self.graphInputs: #Change to sortedInputsAndAxis
-                # print(f'sortedAxis = {sortedAxis}, count = {count}')
-                # if count < 3:
-                #     if values == sortedAxis[count]:
-                #         whatAxis = [key for key,value in transformedAxisEnd.items() if value == value]
-                #         if whatAxis == 'x':
-                #             self.drawXaxis()
-                #             drawnX = True
-                #         elif whatAxis == 'y':
-                #             self.drawYAxis()
-                #             drawnY = True
-                #         elif whatAxis == 'z':
-                #             self.drawZAxis()
-                #             drawnZ = True
-                #         count += 1
-                #     else:
-                #         print('REDRAWN POINT____')
-                newPos = self.trigCalc(values)
-                self.mathConversion[f'{values}'] = newPos
+            for node in self.graphInputs:
+                newPos = self.projection(node.pos)
+                self.mathConversion[node.pos] = newPos
                 pointCircle = pygame.draw.circle(self.graph_surface, (0,0,0), (newPos[0],newPos[1]), 4)
                 self.addDrawnPoints(newPos[0],newPos[1], pointCircle)
-        #     print(f'DRAW CHECKERS: {drawnX},{drawnY},{drawnZ}')
-        #     if drawnX == False:
-        #         self.drawXaxis()
-        #     if drawnY == False:
-        #         self.drawYAxis()
-        #     if drawnZ == False:
-        #         self.drawZAxis()
-        # else:
-        #     self.drawAxis()
+        
+        
+        if len(self.connectingLines)>2:
+            start = self.connectingLines[0].node1
+            planeDectector = self.detectConnectedPlane(self.graphInputs)
+            print(f'planeDectector: {planeDectector}')
+            planePoints = []
+            if planeDectector:
+                for plane in planeDectector:
+                    for node in plane:
+                        planePoints.append(self.mathConversion.get(node.pos))
+                    print(f'drawing polygon at {planePoints}')
+                    pygame.gfxdraw.filled_polygon(self.graph_surface, [value for value in planePoints], (0,50,0))
+                    planePoints.clear()
+            else:
+                pass
+        else:
+            pass
+
         for line in self.connectingLines:
-            linePos = [self.trigCalc(line[0]), self.trigCalc(line[1])]
-            pygame.draw.line(self.graph_surface, (255,165,0), linePos[0], linePos[1], 2)
+            startPos = self.projection(line.node1.pos)
+            endPos = self.projection(line.node2.pos)
+            pygame.draw.line(self.graph_surface, (255,165,0), startPos, endPos, 2)
+        
+
         pygame.draw.rect(self.window, (255,255,255), pygame.Rect(200,130,600,270))
         self.createPointsMenu()
-        self.drawAxis() #DELET THIS
         self.inputSubmit = False
         self.window.blit(self.graph_surface, (0,0))
 
@@ -467,7 +456,7 @@ class mainMenu(Interfaces):
         return transformedPoint
 
 
-    def trigCalc(self, elementPosition):
+    def projection(self, elementPosition):
         # if whatAxis == 'x':
         #     i = 0
         # elif whatAxis == 'y':
@@ -501,8 +490,7 @@ class mainMenu(Interfaces):
         for count,point in enumerate(self.graphInputs[::-1]):
             y = 130+(30*count)
             label = len(self.graphInputs)-count
-            self.startMenuFont.render_to(self.window, (600,y), f'{label}: {point}', fgcolor=(255,0,0))
-            self.deleteFromMenu[label] = point
+            self.startMenuFont.render_to(self.window, (600,y), f'{label}: {str(point.pos)}', fgcolor=(255,0,0))
             self.widgets[label] = Button(
                 self.window, 770, y,
                 20,20,
@@ -510,46 +498,99 @@ class mainMenu(Interfaces):
                 onClick = lambda x=label, y = point: self.deletePointFromGraph(x, y)
             )
 
-    # Delete points logic isnt working ie the widgets doesnt get rid of the corresponding points could be due to new logic madem with recording points?
     def deletePointFromGraph(self,label, point):
         self.graphInputs.remove(point)
         self.widgets[label].hide()
-        pygame.draw.circle(self.graph_surface, (255,255,255), (point[0],point[1]), 4)
+        # pygame.draw.circle(self.graph_surface, (255,255,255), (point.x,point.y), 4)
         self.redraw()
+        for connections in point.connections:
+            # start = self.projection(connections.node1.pos)
+            # end = self.projection(connections.node2.pos)
+            # pygame.draw.line(self.graph_surface, (255,255,255), start, end, 2) 
+            self.connectingLines.remove(connections)
+            self.redraw()
         pass
-    
+
+
     def lineDrawer(self, pos):
         x, y = pos
-        for value in self.checkedPos:
-            if value == pos:
-                return None
-            
+
+        # for value in self.checkedPos:
+        #     if value == pos:
+        #         return None
+
         point3D = [key for key,value in self.mathConversion.items() if value[0] == x and value[1] == y][0]
+        node = self.getNode(point3D)
+        print(self.connectingLinesTemp)
         if self.lineChecker:
-            self.connectingLinesTemp.append(point3D)
+            self.connectingLinesTemp.append(node)
             try:
-                start3D = ast.literal_eval(self.connectingLinesTemp[0])
-                end3D = ast.literal_eval(self.connectingLinesTemp[1])
+                start3D = self.connectingLinesTemp[0]
+                end3D = self.connectingLinesTemp[1]
             except:
                 print('Error evaluating the connecting lines input properly')
             
-            self.connectingLines.append([start3D, end3D])
+            line = Lines(start3D,end3D)
+
+            self.connectingLines.append(line)
+
+            # print(f'linedrawer connecting lines {self.connectingLines} and the given start {tuple(start3D)} and end {tuple(end3D)}')
             self.redraw()
             self.connectingLinesTemp.clear()
             self.lineChecker = False
         else:
-            self.connectingLinesTemp.append(point3D)
+            
+            self.connectingLinesTemp.append(node)
             self.checkedPos.append(pos)
             self.lineChecker = True
-
     
-    # def fixedTrigCalc(self, elementPosition):
-    #     x, y, z = elementPosition
-    #     # Perform fixed calculations here
-    #     # For simplicity, let's assume the fixed reference point is the origin (0, 0, 0)
-    #     projectedX = (300 * x) / (300 + z)
-    #     projectedY = (300 * y) / (300 + z)
-    #     return [projectedX + 300, projectedY + 300]
+    def getNode(self,pos):
+        for node in self.graphInputs:
+            print(node.pos, pos, type(node.pos), type(pos))
+            if node.pos == pos:
+                return node
+
+# Need this to be called when ever a connecting line is drawn
+# Need to manipulate connectedlines list to be a dict where the start is the key and the end is the value
+# Would this work or would it miss casses?
+# Should then draw a  pygame.gfxdraw.filled_polygon() with the points as the parameters
+    def detectConnectedPlane(self, points):
+        def dfs(node, visited, path, start_node):
+            if node in path:
+                # Cycle detected
+                cycle_start_index = path.index(node)
+                cycle = path[cycle_start_index:]  # Extract the cycle
+                if cycle[0] == start_node:  # Ensure it's a closed polygon
+                    # Sort nodes in the cycle to create a canonical representation
+                    sorted_cycle = tuple(sorted(cycle, key=lambda n: (n.x, n.y, n.z)))
+                    if sorted_cycle not in unique_polygons and len(sorted_cycle) > 2:
+                        unique_polygons.add(sorted_cycle)
+                        polygons.append(cycle)
+                return
+
+            visited.add(node)
+            path.append(node)
+
+            for line in node.connections:
+                next_node = line.node2 if line.node1 == node else line.node1
+                if next_node not in visited or next_node == start_node:
+                    dfs(next_node, visited, path, start_node)
+
+            path.pop()  # Backtrack
+
+        polygons = []
+        unique_polygons = set()  # To store unique polygons
+        for point in points:
+            visited = set()
+            dfs(point, visited, [], point)
+
+        return polygons
+ 
+ 
+
+
+
+
 
     def handleInput(self):
         # Error message to prevent pointsMenu overflow
@@ -565,13 +606,29 @@ class mainMenu(Interfaces):
             invalidInputType = Thread(target=lambda: self.systemMessages('Error: Invlaid Type Input', False, True), daemon=True)
             invalidInputType.start()
             return None
-        if all(num > 200 for num in (x_input, y_input, z_input)):
+        if all(num >= 200 for num in (x_input, y_input, z_input)):
             outOfRange = Thread(target=lambda: self.systemMessages('Error: Max Value = 200',False, True), daemon=True)
             outOfRange.start()
             return None
-        self.graphInputs.append([x_input, y_input, z_input])
+        self.graphInputs.append(Node(x_input,y_input,z_input))
         self.inputSubmit = True
         self.redraw()
 
 
+# For connecting lines
+class Node:
+    def __init__(self,x,y,z):
+        self.pos = (x,y,z)
+        self.x = x
+        self.y = y
+        self.z = z
+        self.connections = []
+
+
+class Lines:
+    def __init__(self, node1, node2):
+        self.node1 = node1
+        self.node2 = node2
+        self.node1.connections.append(self)
+        self.node2.connections.append(self)
 
