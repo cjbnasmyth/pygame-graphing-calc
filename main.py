@@ -4,7 +4,7 @@ import pygame_widgets
 import ast
 from functions import *
 
-pygame.init()
+pygame.init() # Intitializing the pygame module
 
 width,length = 800, 600
 surface = pygame.Surface((width,length))
@@ -13,15 +13,11 @@ window = pygame.display.set_mode((width, length))
 window.fill((255,255,255))
 
 hMove, vMove = 0, 0
-cameraArray = [hMove,vMove]
-bottomLayer = MainMenu(manager, window, surface)
-topLayer = StartMenu(manager,window, surface)
-# hBar = bottomLayer.createScrollingContainer()
-# topLayer = hudUI(manager, window, surface)
-# for scrolling to work there must be something in the graph container
-#embedded into a Functions class
+bottomLayer = MainMenu(manager, window, surface) # Instantiating the MainMenu object
+topLayer = StartMenu(manager,window, surface) # Instantiating the StartMenu object
 
-topLayer.createStartMenu()
+
+topLayer.createStartMenu() # topLayer refers to the start menu screen
 
 clock = pygame.time.Clock()
 running = True
@@ -48,7 +44,7 @@ while running:
             values = bottomLayer.drawnPoints.values()
             for values in values:
                 if values.collidepoint(event.pos):
-                    drawerPos = [key for key,value in bottomLayer.drawnPoints.items() if value == values][0]
+                    drawerPos = [key for key,value in bottomLayer.drawnPoints.items() if value == values][0] # Retrieves the 2D point of the pygame object clicked on
                     bottomLayer.lineDrawer(drawerPos)
         if topLayer.state == 'main_menu':
             bottomLayer.createMainMenu()
@@ -57,12 +53,6 @@ while running:
             topLayer.createStartMenu()
             bottomLayer.state = 'main_menu'
 
-
-        # CLEAR TEXT
-        # if event.type == pygame.KEYDOWN or event.type == pygame.MOUSEBUTTONDOWN:
-        #     if topLayer.state == 'start_menu':
-        #         print('made rect')
-        #         pygame.draw.rect(topLayer.window, (0,0,0), pygame.Rect(0,560,800,40))
     manager.process_events(event)
 
     manager.update(time_delta)

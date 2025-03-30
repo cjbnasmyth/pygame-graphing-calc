@@ -11,11 +11,9 @@ from pygame_widgets.textbox import TextBox
 from pygame_widgets.button import Button
 from pygame_widgets.dropdown import Dropdown
 import numpy as np
-import math
 import config
 from mysql.connector import connect, Error
 from collections import defaultdict
-import ast
 
 
 pygame.freetype.init()
@@ -28,12 +26,11 @@ class Interfaces:
         self.widgets = {}
         self.state = None
         # CONFIG FILE?
-        self.startMenuFont = pygame.freetype.Font(None, 20)
-        self.accountActive = False
+        self.defaultFont = pygame.freetype.Font(None, 20)
         self.pwdState = True
         self.menu_created = False
 
-    def hideWidgets(self):
+    def hideAllWidgets(self):
         for i in self.widgets.values():
             i.hide()
 
@@ -44,15 +41,18 @@ class Interfaces:
         else:
             colour = (0,255,0)
         if startMenu:
-            self.startMenuFont.render_to(self.window, (300,580), message, fgcolor=colour)
+            self.defaultFont.render_to(self.window, (300,580), message, fgcolor=colour)
             pygame.display.update()
             sleep(1)
-            pygame.draw.rect(self.window, (0,0,0), pygame.Rect(300,580,400,20))
+            pygame.draw.rect(self.window, (0,0,0), pygame.Rect(300,580,500,20))
         else:
-            self.startMenuFont.render_to(self.window, (600,20), message, fgcolor=colour)
-            pygame.display.update()
+            if error:
+                self.defaultFont.render_to(self.window, (600,20), 'Error:', fgcolor=colour)
+                self.defaultFont.render_to(self.window, (600,40), message, fgcolor=colour)
+            else:
+                self.defaultFont.render_to(self.window, (600,20), message, fgcolor=colour)
             sleep(1)
-            pygame.draw.rect(self.window, (255,245,255), pygame.Rect(600, 20, 200,20))
+            pygame.draw.rect(self.window, (255,255,255), pygame.Rect(600, 0, 200,80))
         
     # def renderWidgets(self):
     #     for i in self.widgets.values():
@@ -63,37 +63,39 @@ class Interfaces:
         try:
             return self.widgets[label].getText()
         except:
-            print(f'Label: {label} doesnt exsist')
+            print(f'Label: {label} doesnt exsist') # Logs error in terminal
 
     def changeState(self):
         if self.state =='start_menu':
-            self.hideWidgets()
+            self.hideAllWidgets()
             self.state = 'main_menu'
         elif self.state == 'main_menu':
             self.menu_created = False
-            self.hideWidgets()
+            self.hideAllWidgets()
             self.state = 'start_menu'
-        print(f"state changed state = {self.state}")
+        print(f"state changed state = {self.state}") # Logs change of state in terminal
 
 
 class StartMenu(Interfaces):
+    def __init__(self, m, w, s):
+        self.targetUser = []
+        super().__init__(m, w, s)
     def createStartMenu(self):
         self.state = 'start_menu'
         self.menu_created = True
         self.window.fill((0,0,0))
-        # forgot password? LATER
-        self.startMenuFont.render_to(self.window, (250,80), 'Username:', fgcolor=(255,255,255))
+        self.defaultFont.render_to(self.window, (250,80), 'Username:', fgcolor=(255,255,255))
         self.widgets['username'] = TextBox(
             self.window, 250, 100,
             300,50
         )
-        self.startMenuFont.render_to(self.window, (250,180), 'Password:', fgcolor=(255,255,255))
+        self.defaultFont.render_to(self.window, (250,180), 'Password:', fgcolor=(255,255,255))
         self.widgets['password'] = TextBox(
             self.window, 250, 200,
             300, 50,
             font = config.pwdFont
         )
-        self.startMenuFont.render_to(self.window, (600,260), 'Show', fgcolor=(255,255,255))
+        self.defaultFont.render_to(self.window, (600,260), 'Show', fgcolor=(255,255,255))
         self.widgets['show_password'] = Button(
             self.window, 600, 200,
             50, 50,
@@ -142,13 +144,16 @@ class StartMenu(Interfaces):
     # DOESNT WORK NEED TO CATCH CASE WHERE USER CHANGES INFO AFTER CREATING ACCONT
     def checkType(self):
         sqlSubmit = self.checkSubmit()
-        print(sqlSubmit)
-        if self.accountActive == False or sqlSubmit == False:
-            logInFail = Thread(target=lambda: self.systemMessages('Error: Not Logged in', True, True), daemon=True)
-            logInFail.start()
+        if sqlSubmit == False:
+            verifyFail = Thread(target=lambda: self.systemMessages('Error: Incorrect Password or Account Type', True, True), daemon=True)
+            verifyFail.start()
             return None
         else:
             config.menu_type = self.widgets['account_type_dropdown'].getSelected()
+            self.targetUser.clear()
+            logInSuccess = Thread(target=lambda: self.systemMessages('Logged in!', True, False), daemon=True)
+            logInSuccess.start()
+            sleep(1)
             self.changeState()
 
     def getTextFields(self):
@@ -157,60 +162,56 @@ class StartMenu(Interfaces):
         accountType = self.widgets['account_type_dropdown'].getSelected()
         return [username, password, accountType]
     
-    # STILL DOESNT WORK INPUT VALID ACCOUNT DATA THEN empty field
     def checkSubmit(self):
         data = self.getTextFields()
-        checkConn = connect(**config.DB_INFO)
+        if [data[0],data[2]] != self.targetUser[0]:
+            return False
+        checkConn = connect(**config.DB_INFO) # Sensitive database info stored in separate config.py file
         checkCursor = checkConn.cursor(buffered=True)
         query = ('SELECT password, accountType FROM users '
                  'WHERE username = %s')
-        checkCursor.execute(query, (data[0],))
+        checkCursor.execute(query, (data[0],)) # Takes the username as the input for query
         condition = checkCursor.fetchone()
-        # run if non-empty tuple
         if condition:
-                # unpacks tuple
                 retrievedPassword, retrievedAccountType = condition
                 if retrievedPassword != data[1] or retrievedAccountType != data[2]:
-                    verifyFail = Thread(target=lambda: self.systemMessages('Error: Incorrect Password or Account Type', True, True), daemon=True)
-                    verifyFail.start()
                     return False
                 else:
                     return True
+        else:
+            return False
 
 
     def addAccount(self):
         data = self.getTextFields()
-        # DISPLAY ACCOUNT CONFIRMATION + USERNAME/PASSWORD EXSIST
         conn = connect(**config.DB_INFO)
         cursor = conn.cursor(buffered=True)
         checkQuery = ('SELECT * FROM users '
                     'WHERE username = %s')
         cursor.execute(checkQuery, (data[0],))
         check = cursor.fetchone()
-        print(checkQuery)
         if any(not element for element in data):
             emptyField = Thread(target=self.systemMessages('Error: Input field empty', True,True),daemon=True)
             emptyField.start()
             check = False
         else:
-            pass
-        print(check)   
+            pass 
         if check is None:
-            self.accountActive = True
             addQuery = ('INSERT INTO users ' 
                     '(username, password, accountType) ' 
                     'VALUES (%s, %s, %s)')
             cursor.execute(addQuery, (data[0], data[1], data[2]))
             accountSuccess = Thread(target=self.systemMessages('Account Created!', True, False),daemon=True)
             accountSuccess.start()
-            pygame.display.update()
+            self.targetUser.append([data[0],data[2]])
+
         else:
             usernameTaken = Thread(target=self.systemMessages('Error: Username Already Taken', True, True), daemon=True)
             usernameTaken.start()
-            pygame.display.update()
+
         conn.commit()
         cursor.close()
-        conn.close()
+        conn.close() # Close connection to database preventing unwanted changes
 
 
 
@@ -224,13 +225,11 @@ class MainMenu(Interfaces):
         self.hMove, self.vMove = 0, 0
         self.graph_surface = pygame.Surface((600,600))
         self.graphInputs = []
-        self.inputSubmit = False
         self.mathConversion = {}
         self.drawnPoints = {}
         self.connectingLines = []
         self.lineChecker = False
         self.connectingLinesTemp = []
-        self.checkedPos = []  # Moved checkedPos to an instance variable
         super().__init__(m, w, s)
     
 
@@ -280,9 +279,8 @@ class MainMenu(Interfaces):
         )
         
         self.drawAxis()
+        self.window.blit(self.graph_surface, (0,0)) # Merges the graph surface onto the main surface
 
-        # self.renderWidgets
-        self.window.blit(self.graph_surface, (0,0))
 
     def addDrawnPoints(self, x ,y, value):
         self.drawnPoints[(x ,y)] = value
@@ -317,7 +315,7 @@ class MainMenu(Interfaces):
                         xEnd, 2)
         
         xlabelCoords = self.projection([220,5,0])
-        self.startMenuFont.render_to(self.graph_surface, (xlabelCoords[0], xlabelCoords[1]), 'X', fgcolor=(255,0,0))
+        self.defaultFont.render_to(self.graph_surface, (xlabelCoords[0], xlabelCoords[1]), 'X', fgcolor=(255,0,0))
     
     def drawYAxis(self):
         # y line
@@ -328,7 +326,7 @@ class MainMenu(Interfaces):
                         yEnd, 2)
         
         yLabelCoords = self.projection([5,220,0])
-        self.startMenuFont.render_to(self.graph_surface, (yLabelCoords[0], yLabelCoords[1]), 'Y', fgcolor=(0,255,0))
+        self.defaultFont.render_to(self.graph_surface, (yLabelCoords[0], yLabelCoords[1]), 'Y', fgcolor=(0,255,0))
     
     def drawZAxis(self):
         # z line
@@ -337,7 +335,7 @@ class MainMenu(Interfaces):
         pygame.draw.line(self.graph_surface, (0,0,255), zStart, zEnd, 2)
 
         zLabelCoords = self.projection([5,5,220])
-        self.startMenuFont.render_to(self.graph_surface, (zLabelCoords[0], zLabelCoords[1]), 'Z', fgcolor=(0,0,255))
+        self.defaultFont.render_to(self.graph_surface, (zLabelCoords[0], zLabelCoords[1]), 'Z', fgcolor=(0,0,255))
 
     def getMathPoint(self, point3D):
         for key, value in self.mathConversion.items():
@@ -348,15 +346,11 @@ class MainMenu(Interfaces):
 
     def redraw(self):
         self.graph_surface.fill((255,255,255))
+
+        # Axis 1st
         self.drawAxis()
 
-        # print(f'connectingLines.itesm() {self.connectingLines.items()}')
-        # for key,value in self.connectingLines.items():
-        #     linePos = [self.projection(list(key)), self.projection(list(value))]
-        #     # print(f'drawing line with this start {list(key)} and end {list(value)}')
-        #     pygame.draw.line(self.graph_surface, (255,165,0), linePos[0], linePos[1], 2)
-
-        # This logic not working leads to one of the connecting lines (last one to be drawn?) to be hiden/removed from self.connectingLines\\\\\\
+        # Points 2nd
         if len(self.graphInputs) > 0:
             for node in self.graphInputs:
                 newPos = self.projection(node.pos)
@@ -364,61 +358,47 @@ class MainMenu(Interfaces):
                 pointCircle = pygame.draw.circle(self.graph_surface, (0,0,0), (newPos[0],newPos[1]), 4)
                 self.addDrawnPoints(newPos[0],newPos[1], pointCircle)
         
-        
+        # Planes 3rd
         if len(self.connectingLines)>2:
-            start = self.connectingLines[0].node1
-            planeDectector = self.detectConnectedPlane(self.graphInputs)
-            print(f'planeDectector: {planeDectector}')
+            planeDetector = self.detectConnectedPlane(self.graphInputs)
             planePoints = []
-            if planeDectector:
-                for plane in planeDectector:
+            if planeDetector:
+                for plane in planeDetector:
                     for node in plane:
                         planePoints.append(self.mathConversion.get(node.pos))
-                    print(f'drawing polygon at {planePoints}')
-                    pygame.gfxdraw.filled_polygon(self.graph_surface, [value for value in planePoints], (0,50,0))
+                    pygame.gfxdraw.filled_polygon(self.graph_surface, [value for value in planePoints], (160,244,225)) # Draws a polygon with the vertices being nodes in cycle
                     planePoints.clear()
             else:
                 pass
         else:
             pass
-
+        # Connecting lines 4th
         for line in self.connectingLines:
             startPos = self.projection(line.node1.pos)
             endPos = self.projection(line.node2.pos)
             pygame.draw.line(self.graph_surface, (255,165,0), startPos, endPos, 2)
         
+        # Points labels 5th
+        for node in self.graphInputs:
+            labelFont = pygame.freetype.Font(None, 10) # Sets a smaller font size for labels
+            xPointLabel = self.projection([node.x-5,-10,0])
+            yPointLabel = self.projection([-20,node.y-5,0])
+            zPointLabel = self.projection([-20,0,node.z-5])
+            labelFont.render_to(self.graph_surface, (xPointLabel[0], xPointLabel[1]), str(node.x), fgcolor=(255,0,0))
+            labelFont.render_to(self.graph_surface, (yPointLabel[0], yPointLabel[1]), str(node.y), fgcolor=(0,255,0))
+            labelFont.render_to(self.graph_surface, (zPointLabel[0], zPointLabel[1]), str(node.z), fgcolor=(0,0,255))
 
-        pygame.draw.rect(self.window, (255,255,255), pygame.Rect(200,130,600,270))
+        pygame.draw.rect(self.window, (255,255,255), pygame.Rect(200,130,600,270)) # Clears points menu area
         self.createPointsMenu()
-        self.inputSubmit = False
         self.window.blit(self.graph_surface, (0,0))
 
 
-    # def getCameraPos(self):
 
-    #     yaw = np.radians(self.hMove)
-    #     pitch = np.radians(self.vMove)
-        
-    #     # Calculate camera position based on spherical coordinates (using zoom as radius)
-    #     x = self.zoom * np.cos(pitch) * np.sin(yaw)
-    #     y = self.zoom * np.sin(pitch)
-    #     z = self.zoom * np.cos(pitch) * np.cos(yaw)
-    #     # https://en.wikipedia.org/wiki/Spherical_coordinate_system#Cartesian_coordinates
-    #     # x = self.zoom * np.sin(pitch) * np.cos(yaw)
-    #     # y = self.zoom * np.sin(pitch) * np.sin(yaw)
-    #     # z = self.zoom * np.cos(pitch)
-    #     # https://stackoverflow.com/questions/5278417/rotating-body-from-spherical-coordinates
-    #     # x = self.zoom * np.sin(pitch) * np.cos(yaw)
-    #     # y = (self.zoom * np.sin(pitch)* np.sin(yaw)) * np.cos(2) - (self.zoom * np.cos(pitch)) * np.sin(2)
-    #     # z = (self.zoom * np.sin(pitch)*np.sin(yaw)) * np.sin(2) + (self.zoom * np.cos(pitch)) * np.cos(2)
-
-    #     return np.array([x, y, z])
 
     def rotatePoint(self, point, axis, theta):
-        # https://math.stackexchange.com/questions/4373008/rotation-of-a-point-around-an-axis-using-the-cartesian-coordinates
-        point = np.array(point)
+        point = np.array(point) # Converts to a numpy array
         axis = np.array(axis)
-        axis = axis / np.linalg.norm(axis)
+        axis = axis / np.linalg.norm(axis) # Ensures that axis = a unit vector (np.linalg.norm(axis) = magnitude of vector)
 
         # Rodrigues' rotation formula
         cosTheta = np.cos(theta)
@@ -431,24 +411,8 @@ class MainMenu(Interfaces):
     
     def pointTransformation(self, point):
         
-        yaw = np.radians(self.hMove)
+        yaw = np.radians(self.hMove) # Converts to radians
         pitch = np.radians(self.vMove)
-
-        # yawMatrix = np.array([
-        #     [np.cos(yaw), 0, np.sin(yaw)],
-        #     [0, 1, 0],
-        #     [-np.sin(yaw), 0, np.cos(yaw)]
-        # ])
-
-        # pitchMatrix = np.array([
-        #     [1, 0, 0],
-        #     [0, np.cos(pitch), -np.sin(pitch)],
-        #     [0, np.sin(pitch), np.cos(pitch)]
-        # ])
-
-        # relativePos = np.array(point) - np.array(self.getCameraPos())
-        # transformedPoint = pitchMatrix @ (yawMatrix @ relativePos)
-
         
         transformedPoint = self.rotatePoint(point, [0, 1, 0], yaw)
         transformedPoint = self.rotatePoint(transformedPoint, [1, 0, 0], pitch)
@@ -457,20 +421,6 @@ class MainMenu(Interfaces):
 
 
     def projection(self, elementPosition):
-        # if whatAxis == 'x':
-        #     i = 0
-        # elif whatAxis == 'y':
-        #     i = 1
-        # elif whatAxis == 'z' or whatAxis == None:
-        #     i = 2
-        # cameraPostion = self.getCameraPos()
-  
-        # # How to work out the camera z value (300)??? when using the 2 hMove and vMove 
-        # print(f'cam pos: {cameraPostion}')
-        # print(f'elem pos: {elementPosition}')
-        # projectedX = (300*(cameraPostion[0]+ elementPosition[0])) / (300+ elementPosition[i])
-        # projectedY = (300*(cameraPostion[1]+ elementPosition[1])) / (300+ elementPosition[i])
-        # return [(projectedX+300)-cameraPostion[0], (projectedY+300)-cameraPostion[1]]
         finalPoint = self.pointTransformation(elementPosition)
 
     
@@ -487,10 +437,10 @@ class MainMenu(Interfaces):
         return [projectedX, projectedY]
 
     def createPointsMenu(self):
-        for count,point in enumerate(self.graphInputs[::-1]):
+        for count,point in enumerate(self.graphInputs[::-1]): # enumerate generates a tuple of (index, value) for each element in the list
             y = 130+(30*count)
             label = len(self.graphInputs)-count
-            self.startMenuFont.render_to(self.window, (600,y), f'{label}: {str(point.pos)}', fgcolor=(255,0,0))
+            self.defaultFont.render_to(self.window, (600,y), f'{label}: {str(point.pos)}', fgcolor=(255,0,0))
             self.widgets[label] = Button(
                 self.window, 770, y,
                 20,20,
@@ -500,87 +450,73 @@ class MainMenu(Interfaces):
 
     def deletePointFromGraph(self,label, point):
         self.graphInputs.remove(point)
-        self.widgets[label].hide()
-        # pygame.draw.circle(self.graph_surface, (255,255,255), (point.x,point.y), 4)
-        self.redraw()
+        self.widgets[label].hide() # ‘Deletes’ the widget from screen
         for connections in point.connections:
-            # start = self.projection(connections.node1.pos)
-            # end = self.projection(connections.node2.pos)
-            # pygame.draw.line(self.graph_surface, (255,255,255), start, end, 2) 
-            self.connectingLines.remove(connections)
-            self.redraw()
-        pass
+            if len(self.connectingLines) == 0:
+                point.connections.clear()
+            else:
+                pass
+            if connections in self.connectingLines:
+                self.connectingLines.remove(connections)
+            else:
+                print(f"Warning: Tried to remove {connections}, but it wasn't in {self.connectingLines}") # Logs potentially error/warning in terminal
+        self.redraw()
+
 
 
     def lineDrawer(self, pos):
         x, y = pos
 
-        # for value in self.checkedPos:
-        #     if value == pos:
-        #         return None
 
-        point3D = [key for key,value in self.mathConversion.items() if value[0] == x and value[1] == y][0]
-        node = self.getNode(point3D)
-        print(self.connectingLinesTemp)
+        point3D = [key for key,value in self.mathConversion.items() if value[0] == x and value[1] == y][0] # Retrieves the corresponding 3D point for the given 2D values
+        node = self.getNode(point3D) # Retrieves the node object corresponding to the 3D point
         if self.lineChecker:
             self.connectingLinesTemp.append(node)
-            try:
-                start3D = self.connectingLinesTemp[0]
-                end3D = self.connectingLinesTemp[1]
-            except:
-                print('Error evaluating the connecting lines input properly')
-            
-            line = Lines(start3D,end3D)
 
+            start3D = self.connectingLinesTemp[0]
+            end3D = self.connectingLinesTemp[1]
+
+            line = Lines(start3D,end3D)
             self.connectingLines.append(line)
 
-            # print(f'linedrawer connecting lines {self.connectingLines} and the given start {tuple(start3D)} and end {tuple(end3D)}')
             self.redraw()
             self.connectingLinesTemp.clear()
             self.lineChecker = False
         else:
-            
             self.connectingLinesTemp.append(node)
-            self.checkedPos.append(pos)
             self.lineChecker = True
     
     def getNode(self,pos):
         for node in self.graphInputs:
-            print(node.pos, pos, type(node.pos), type(pos))
             if node.pos == pos:
                 return node
 
-# Need this to be called when ever a connecting line is drawn
-# Need to manipulate connectedlines list to be a dict where the start is the key and the end is the value
-# Would this work or would it miss casses?
-# Should then draw a  pygame.gfxdraw.filled_polygon() with the points as the parameters
     def detectConnectedPlane(self, points):
-        def dfs(node, visited, path, start_node):
+        def dfs(node, visited, path, startNode):
             if node in path:
                 # Cycle detected
-                cycle_start_index = path.index(node)
-                cycle = path[cycle_start_index:]  # Extract the cycle
-                if cycle[0] == start_node:  # Ensure it's a closed polygon
-                    # Sort nodes in the cycle to create a canonical representation
-                    sorted_cycle = tuple(sorted(cycle, key=lambda n: (n.x, n.y, n.z)))
-                    if sorted_cycle not in unique_polygons and len(sorted_cycle) > 2:
-                        unique_polygons.add(sorted_cycle)
+                cycleStart = path.index(node)
+                cycle = path[cycleStart:]  # Extract the cycle
+                if cycle[0] == startNode:  # Ensure it's a closed polygon
+                    sortedCycle = tuple(sorted(cycle, key=lambda n: (n.x, n.y, n.z)))
+                    if sortedCycle not in uniquePolygons and len(sortedCycle) > 2:
+                        uniquePolygons.add(sortedCycle)
                         polygons.append(cycle)
-                return
+                return # Breaks recursion
 
             visited.add(node)
             path.append(node)
 
             for line in node.connections:
-                next_node = line.node2 if line.node1 == node else line.node1
-                if next_node not in visited or next_node == start_node:
-                    dfs(next_node, visited, path, start_node)
+                nextNode = line.node2 if line.node1 == node else line.node1 # Ensures the next node is not the current node (ie choosing the right node from node1/node2)
+                if nextNode not in visited or nextNode == startNode:
+                    dfs(nextNode, visited, path, startNode)
 
-            path.pop()  # Backtrack
+            path.pop()
 
         polygons = []
-        unique_polygons = set()  # To store unique polygons
-        for point in points:
+        uniquePolygons = set()
+        for point in points: # Iterates through all points
             visited = set()
             dfs(point, visited, [], point)
 
@@ -593,25 +529,26 @@ class MainMenu(Interfaces):
 
 
     def handleInput(self):
-        # Error message to prevent pointsMenu overflow
+        # Error message to prevent pointsMenu overflow (spacing allows for 9)
         if len(self.graphInputs) == 9:
-            pMenuOverflowThread = Thread(target=lambda : self.systemMessages('Error: Max No. Points',False, True), daemon=True)
+            pMenuOverflowThread = Thread(target=lambda : self.systemMessages('Max No. Points',False, True), daemon=True)
             pMenuOverflowThread.start()
             return None
         try:
             x_input = int(self.getInput('inputEntry1'))
             y_input = int(self.getInput('inputEntry2'))
             z_input = int(self.getInput('inputEntry3'))
-        except ValueError:
-            invalidInputType = Thread(target=lambda: self.systemMessages('Error: Invlaid Type Input', False, True), daemon=True)
+        except:
+            invalidInputType = Thread(target=lambda: self.systemMessages('Invlaid Type Input', False, True), daemon=True)
             invalidInputType.start()
             return None
-        if all(num >= 200 for num in (x_input, y_input, z_input)):
-            outOfRange = Thread(target=lambda: self.systemMessages('Error: Max Value = 200',False, True), daemon=True)
+        if max(x_input, y_input, z_input) > 200:
+            outOfRange = Thread(target=lambda: self.systemMessages('Max Value = 200',False, True), daemon=True)
             outOfRange.start()
             return None
+        
         self.graphInputs.append(Node(x_input,y_input,z_input))
-        self.inputSubmit = True
+
         self.redraw()
 
 
