@@ -13,7 +13,6 @@ from pygame_widgets.dropdown import Dropdown
 import numpy as np
 import config
 from mysql.connector import connect, Error
-from collections import defaultdict
 
 
 pygame.freetype.init()
@@ -44,11 +43,16 @@ class Interfaces:
             self.defaultFont.render_to(self.window, (300,580), message, fgcolor=colour)
             pygame.display.update()
             sleep(1)
-            pygame.draw.rect(self.window, (0,0,0), pygame.Rect(300,580,500,20))
+            pygame.draw.rect(self.window, (0,0,0), pygame.Rect(300,580,300,20))
         else:
             if error:
-                self.defaultFont.render_to(self.window, (600,20), 'Error:', fgcolor=colour)
-                self.defaultFont.render_to(self.window, (600,40), message, fgcolor=colour)
+                if type(message) == list:
+                    self.defaultFont.render_to(self.window, (600,10),'Error:', fgcolor=colour)
+                    self.defaultFont.render_to(self.window, (600,30), message[0], fgcolor=colour)
+                    self.defaultFont.render_to(self.window, (600,50), f"{', '.join(message[1])}: {', '.join(message[2])}", fgcolor=colour)
+                else:
+                    self.defaultFont.render_to(self.window, (600,20),'Error:', fgcolor=colour)
+                    self.defaultFont.render_to(self.window, (600,40), message, fgcolor=colour)
             else:
                 self.defaultFont.render_to(self.window, (600,20), message, fgcolor=colour)
             sleep(1)
@@ -145,7 +149,7 @@ class StartMenu(Interfaces):
     def checkType(self):
         sqlSubmit = self.checkSubmit()
         if sqlSubmit == False:
-            verifyFail = Thread(target=lambda: self.systemMessages('Error: Incorrect Password or Account Type', True, True), daemon=True)
+            verifyFail = Thread(target=lambda: self.systemMessages('Error: Invalid Account Details', True, True), daemon=True)
             verifyFail.start()
             return None
         else:
@@ -164,8 +168,11 @@ class StartMenu(Interfaces):
     
     def checkSubmit(self):
         data = self.getTextFields()
-        if [data[0],data[2]] != self.targetUser[0]:
-            return False
+        try:
+            if [data[0],data[2]] != self.targetUser[0]:
+                return False
+        except:
+            pass
         checkConn = connect(**config.DB_INFO) # Sensitive database info stored in separate config.py file
         checkCursor = checkConn.cursor(buffered=True)
         query = ('SELECT password, accountType FROM users '
@@ -194,9 +201,11 @@ class StartMenu(Interfaces):
             emptyField = Thread(target=self.systemMessages('Error: Input field empty', True,True),daemon=True)
             emptyField.start()
             check = False
+            return None
         else:
             pass 
         if check is None:
+            self.targetUser.clear()
             addQuery = ('INSERT INTO users ' 
                     '(username, password, accountType) ' 
                     'VALUES (%s, %s, %s)')
@@ -345,6 +354,7 @@ class MainMenu(Interfaces):
 
 
     def redraw(self):
+        labelFont = pygame.freetype.Font(None, 10) # Sets a smaller font size for labels
         self.graph_surface.fill((255,255,255))
 
         # Axis 1st
@@ -359,14 +369,22 @@ class MainMenu(Interfaces):
                 self.addDrawnPoints(newPos[0],newPos[1], pointCircle)
         
         # Planes 3rd
-        if len(self.connectingLines)>2:
+        if len(self.connectingLines)>2: # For a closed shape to exists there must be atleast 3 lines as 2 = line
             planeDetector = self.detectConnectedPlane(self.graphInputs)
             planePoints = []
             if planeDetector:
                 for plane in planeDetector:
+                    print(f'planes view in {self.graphInputs}')
                     for node in plane:
-                        planePoints.append(self.mathConversion.get(node.pos))
-                    pygame.gfxdraw.filled_polygon(self.graph_surface, [value for value in planePoints], (160,244,225)) # Draws a polygon with the vertices being nodes in cycle
+                        if node in self.graphInputs:
+                            print(f'drawing with the points {node}')
+                            planePoints.append(self.mathConversion.get(node.pos))
+                        else:
+                            pass
+                    try:
+                        pygame.gfxdraw.filled_polygon(self.graph_surface, [value for value in planePoints], (160,244,225)) # Draws a polygon with the vertices being nodes in cycle
+                    except ValueError:
+                        print('Invalid Poylgon detected') # Logs if a polygon with a delted point is detected
                     planePoints.clear()
             else:
                 pass
@@ -380,13 +398,15 @@ class MainMenu(Interfaces):
         
         # Points labels 5th
         for node in self.graphInputs:
-            labelFont = pygame.freetype.Font(None, 10) # Sets a smaller font size for labels
             xPointLabel = self.projection([node.x-5,-10,0])
             yPointLabel = self.projection([-20,node.y-5,0])
             zPointLabel = self.projection([-20,0,node.z-5])
             labelFont.render_to(self.graph_surface, (xPointLabel[0], xPointLabel[1]), str(node.x), fgcolor=(255,0,0))
             labelFont.render_to(self.graph_surface, (yPointLabel[0], yPointLabel[1]), str(node.y), fgcolor=(0,255,0))
             labelFont.render_to(self.graph_surface, (zPointLabel[0], zPointLabel[1]), str(node.z), fgcolor=(0,0,255))
+
+        # Rotation Lables 6th
+        labelFont.render_to(self.graph_surface, (240, 580), f'Horizontal {self.hMove}°, Vertical {self.vMove}°', fgcolor=(0,0,0))
 
         pygame.draw.rect(self.window, (255,255,255), pygame.Rect(200,130,600,270)) # Clears points menu area
         self.createPointsMenu()
@@ -534,25 +554,39 @@ class MainMenu(Interfaces):
             pMenuOverflowThread = Thread(target=lambda : self.systemMessages('Max No. Points',False, True), daemon=True)
             pMenuOverflowThread.start()
             return None
+        invalidInput = [[],[]]
         try:
             x_input = int(self.getInput('inputEntry1'))
+        except:
+            invalidInput[0].append('X')
+            invalidInput[1].append(self.getInput('inputEntry1'))
+        try:
             y_input = int(self.getInput('inputEntry2'))
+        except:
+            invalidInput[0].append('Y')
+            invalidInput[1].append(self.getInput('inputEntry2'))
+        try:
             z_input = int(self.getInput('inputEntry3'))
         except:
-            invalidInputType = Thread(target=lambda: self.systemMessages('Invlaid Type Input', False, True), daemon=True)
+            invalidInput[0].append('Z')
+            invalidInput[1].append(self.getInput('inputEntry3'))
+
+        if invalidInput[0] != []:
+            invalidInputType = Thread(target=lambda: self.systemMessages(["Invalid Input Type", invalidInput[0],invalidInput[1]], False, True), daemon=True)
             invalidInputType.start()
             return None
+
         if max(x_input, y_input, z_input) > 200:
             outOfRange = Thread(target=lambda: self.systemMessages('Max Value = 200',False, True), daemon=True)
             outOfRange.start()
             return None
         
         self.graphInputs.append(Node(x_input,y_input,z_input))
-
+        pointAdded = Thread(target=lambda: self.systemMessages('Point Added!',False, False), daemon=True)
+        pointAdded.start()
         self.redraw()
 
 
-# For connecting lines
 class Node:
     def __init__(self,x,y,z):
         self.pos = (x,y,z)

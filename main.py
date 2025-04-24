@@ -36,7 +36,6 @@ while running:
                 bottomLayer.vMove += 2
             if event.key == K_DOWN:
                 bottomLayer.vMove -= 2
-            window.fill((255,255,255))
             bottomLayer.drawnPoints.clear()
             bottomLayer.redraw()
         if event.type == pygame.MOUSEBUTTONDOWN:
