@@ -1,0 +1,4 @@
+([('main',
+   '/Users/charliebarnett/Library/Mobile '
+   'Documents/com~apple~CloudDocs/Documents/GitHub/pygame-graphing-calc/dist/main',
+   'EXECUTABLE')],)

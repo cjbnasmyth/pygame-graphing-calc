@@ -75,6 +75,10 @@ class Interfaces:
             self.state = 'main_menu'
         elif self.state == 'main_menu':
             self.menu_created = False
+            self.graphInputs.clear()
+            self.connectingLines.clear()
+            self.mathConversion.clear()
+            self.drawnPoints.clear()
             self.hideAllWidgets()
             self.state = 'start_menu'
         print(f"state changed state = {self.state}") # Logs change of state in terminal
@@ -406,7 +410,7 @@ class MainMenu(Interfaces):
             labelFont.render_to(self.graph_surface, (zPointLabel[0], zPointLabel[1]), str(node.z), fgcolor=(0,0,255))
 
         # Rotation Lables 6th
-        labelFont.render_to(self.graph_surface, (240, 580), f'Horizontal {self.hMove}°, Vertical {self.vMove}°', fgcolor=(0,0,0))
+        labelFont.render_to(self.graph_surface, (240, 580), f'Horizontal {self.hMove*-1}°, Vertical {self.vMove}°', fgcolor=(0,0,0))
 
         pygame.draw.rect(self.window, (255,255,255), pygame.Rect(200,130,600,270)) # Clears points menu area
         self.createPointsMenu()
